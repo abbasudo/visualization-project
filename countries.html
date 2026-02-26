@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>World Development Map (1543-2022)</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #222; color: #fff; margin: 0; display: flex; flex-direction: column; align-items: center; }
+        h1 { margin-top: 20px; font-weight: 300; }
+        
+        #container { position: relative; width: 960px; height: 600px; margin-top: 20px; }
+        
+        /* Map Styles */
+        svg { background: #333; border-radius: 8px; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+        .country { stroke: #555; stroke-width: 0.5px; transition: fill 0.2s; }
+        .country:hover { stroke: #fff; stroke-width: 1.5px; }
+
+        /* Controls */
+        #controls { margin-top: 15px; width: 960px; display: flex; gap: 20px; align-items: center; justify-content: center; }
+        
+        button { background: #4CAF50; border: none; color: white; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        button:hover { background: #45a049; }
+
+        .slider-container { flex-grow: 1; display: flex; align-items: center; gap: 10px; }
+        input[type=range] { flex-grow: 1; cursor: pointer; }
+
+        /* Metric Toggles */
+        .toggle-container { background: #444; padding: 5px; border-radius: 20px; display: flex; }
+        .toggle-btn { padding: 5px 15px; border-radius: 15px; cursor: pointer; font-size: 14px; user-select: none; }
+        .toggle-btn.active { background: #fff; color: #222; font-weight: bold; }
+
+        /* Year Display */
+        #year-display { font-size: 40px; font-weight: bold; position: absolute; bottom: 30px; left: 30px; color: rgba(255,255,255,0.8); pointer-events: none; }
+
+        /* Tooltip */
+        #tooltip { position: absolute; background: rgba(0,0,0,0.9); color: #fff; padding: 10px; border: 1px solid #555; border-radius: 4px; pointer-events: none; opacity: 0; font-size: 13px; z-index: 10; }
+
+        /* Legend */
+        #legend-container { position: absolute; bottom: 30px; right: 20px; width: 200px; }
+        .legend-bar { height: 10px; width: 100%; margin-top: 5px; border-radius: 2px; }
+        .legend-labels { display: flex; justify-content: space-between; font-size: 12px; color: #aaa; }
+    </style>
+</head>
+<body>
+
+    <h1>World Development Timelapse</h1>
+
+    <div id="controls">
+        <button id="play-btn">Play</button>
+        <button id="prev-btn">Previous</button>
+        <button id="next-btn">Next</button>
+        
+        <div class="toggle-container">
+            <div class="toggle-btn active" id="btn-gdp" onclick="setMetric('gdp')">GDP per Capita</div>
+            <div class="toggle-btn" id="btn-life" onclick="setMetric('life')">Life Expectancy</div>
+        </div>
+
+        <div class="slider-container">
+            <span id="min-year">1543</span>
+            <input type="range" id="year-slider" min="1543" max="2022" value="1543">
+            <span id="max-year">2022</span>
+        </div>
+    </div>
+
+    <div id="container">
+        <div id="year-display">1543</div>
+        <div id="tooltip"></div>
+        
+        <div id="legend-container">
+            <div class="legend-labels"><span id="legend-min">0</span><span id="legend-max">100k</span></div>
+            <div class="legend-bar" id="legend-gradient"></div>
+            <div style="text-align: center; font-size: 12px; margin-top:3px;" id="legend-title">GDP ($)</div>
+        </div>
+    </div>
+
+<script>
+    // --- 1. CONFIGURATION ---
+    const width = 960;
+    const height = 600;
+    let currentMetric = 'gdp'; // 'gdp' or 'life'
+    let currentYear = 1543;
+    let isPlaying = false;
+    let timer;
+    let dataMap = {}; // Will hold processed data: { year: { countryCode: { gdp, life } } }
+
+    // Color Scales
+    // GDP: Log scale (Viridis or Plasma usually looks good for dark maps)
+    const colorGDP = d3.scaleSequential(d3.interpolatePlasma).domain([0, Math.log(100000)]); 
+    // Life Exp: Linear scale (Magma or Turbo)
+    const colorLife = d3.scaleSequential(d3.interpolateViridis).domain([30, 85]);
+
+    // Map Projection
+    const projection = d3.geoNaturalEarth1().scale(160).translate([width / 2, height / 2]);
+    const path = d3.geoPath().projection(projection);
+
+    const svg = d3.select("#container").append("svg")
+        .attr("width", width)
+        .attr("height", height);
+
+    const tooltip = d3.select("#tooltip");
+
+    // --- 2. DATA LOADING ---
+    Promise.all([
+        d3.json("https://raw.githubusercontent.com/holtzy/D3-graph-gallery/master/DATA/world.geojson"),
+        d3.csv("https://ourworldindata.org/grapher/life-expectancy-vs-gdp-per-capita.csv?v=1&csvType=full")
+    ]).then(([geoData, csvData]) => {
+
+        // --- 3. PROCESS DATA ---
+        // Create a fast lookup map: dataMap[year][code] = { gdp, life }
+        csvData.forEach(d => {
+            const y = +d.Year;
+            if (y < 1543 || y > 2022) return; // Limit data range
+            const code = d.Code;
+            if (!dataMap[y]) dataMap[y] = {};
+            dataMap[y][code] = {
+                gdp: +d["GDP per capita"],
+                life: +d["Life expectancy at birth"],
+                country: d.Entity
+            };
+        });
+
+        // Determine range
+        const years = Object.keys(dataMap).map(Number).sort((a,b)=>a-b);
+        const minYear = Math.max(1543, years[0]);
+        const maxYear = Math.min(2022, years[years.length-1]);
+        
+        const slider = document.getElementById("year-slider");
+        slider.min = minYear;
+        slider.max = maxYear;
+        slider.value = minYear;
+        currentYear = minYear;
+        document.getElementById("min-year").innerText = minYear;
+        document.getElementById("max-year").innerText = maxYear;
+
+        // --- 4. DRAW MAP ---
+        svg.append("g")
+            .selectAll("path")
+            .data(geoData.features)
+            .enter()
+            .append("path")
+            .attr("d", path)
+            .attr("class", "country")
+            .attr("id", d => `c-${d.id}`) // d.id is usually the ISO-3 code
+            .style("fill", "#444") // Default color
+            .on("mouseover", function(event, d) {
+                const code = d.id;
+                const info = dataMap[currentYear][code];
+                
+                let htmlContent = `<strong>${d.properties.name}</strong><br/>`;
+                if (info) {
+                    htmlContent += `GDP: $${info.gdp ? Math.round(info.gdp).toLocaleString() : 'N/A'}<br/>`;
+                    htmlContent += `Life Exp: ${info.life ? info.life.toFixed(1) : 'N/A'} yrs`;
+                } else {
+                    htmlContent += "No data";
+                }
+
+                tooltip.html(htmlContent)
+                    .style("opacity", 1)
+                    .style("left", (event.pageX + 10) + "px")
+                    .style("top", (event.pageY - 20) + "px");
+            })
+            .on("mouseout", () => tooltip.style("opacity", 0));
+
+        // Initial paint
+        updateMap(minYear);
+        updateLegend();
+
+        // --- 5. FUNCTIONS ---
+
+        function getNextYear(year) {
+            for (let i = 0; i < years.length; i++) {
+                if (years[i] > year) return years[i];
+            }
+            return null;
+        }
+
+        function getPrevYear(year) {
+            for (let i = years.length - 1; i >= 0; i--) {
+                if (years[i] < year) return years[i];
+            }
+            return null;
+        }
+
+        // Expose function to global scope for HTML buttons
+        window.setMetric = function(metric) {
+            currentMetric = metric;
+            // Update Toggle UI
+            d3.selectAll(".toggle-btn").classed("active", false);
+            d3.select(metric === 'gdp' ? "#btn-gdp" : "#btn-life").classed("active", true);
+            
+            updateLegend();
+            updateMap(currentYear);
+        };
+
+        function updateMap(year) {
+            d3.select("#year-display").text(year);
+            slider.value = year;
+
+            svg.selectAll("path")
+                .style("fill", function(d) {
+                    const code = d.id;
+                    const record = dataMap[year] ? dataMap[year][code] : null;
+
+                    if (!record) return "#444"; // No data for this year
+
+                    if (currentMetric === 'gdp') {
+                        if (!record.gdp) return "#444";
+                        return colorGDP(Math.log(record.gdp)); // Use Log scale
+                    } else {
+                        if (!record.life) return "#444";
+                        return colorLife(record.life);
+                    }
+                });
+        }
+
+        function updateLegend() {
+            const legendBar = document.getElementById("legend-gradient");
+            const title = document.getElementById("legend-title");
+            const lMin = document.getElementById("legend-min");
+            const lMax = document.getElementById("legend-max");
+
+            if (currentMetric === 'gdp') {
+                legendBar.style.background = "linear-gradient(to right, #0d0887, #cc4778, #f0f921)"; // Plasma-ish
+                title.innerText = "GDP per Capita (Log Scale)";
+                lMin.innerText = "$0";
+                lMax.innerText = "$100k+";
+            } else {
+                legendBar.style.background = "linear-gradient(to right, #440154, #21918c, #fde725)"; // Viridis-ish
+                title.innerText = "Life Expectancy (Years)";
+                lMin.innerText = "30 yrs";
+                lMax.innerText = "85 yrs";
+            }
+        }
+
+        // --- 6. ANIMATION LOOP ---
+        function step() {
+            // Find next available year
+            let nextYear = getNextYear(currentYear);
+            
+            if (!nextYear) {
+                stopAnimation();
+                return;
+            }
+
+            currentYear = nextYear;
+            updateMap(currentYear);
+        }
+
+        function startAnimation() {
+            if (!isPlaying) {
+                isPlaying = true;
+                d3.select("#play-btn").text("Pause");
+                if (currentYear >= maxYear) currentYear = minYear;
+                timer = d3.interval(step, 100); // 100ms per frame
+            }
+        }
+
+        function stopAnimation() {
+            isPlaying = false;
+            d3.select("#play-btn").text("Play");
+            if (timer) timer.stop();
+        }
+
+        // Event Listeners
+        d3.select("#play-btn").on("click", () => isPlaying ? stopAnimation() : startAnimation());
+        
+        d3.select("#year-slider").on("input", function() {
+            stopAnimation();
+            currentYear = +this.value;
+            updateMap(currentYear);
+        });
+
+        d3.select("#next-btn").on("click", () => {
+            stopAnimation();
+            const next = getNextYear(currentYear);
+            if (next) {
+                currentYear = next;
+                updateMap(currentYear);
+            }
+        });
+
+        d3.select("#prev-btn").on("click", () => {
+            stopAnimation();
+            const prev = getPrevYear(currentYear);
+            if (prev) {
+                currentYear = prev;
+                updateMap(currentYear);
+            }
+        });
+
+    }).catch(err => {
+        console.error(err);
+        alert("Error loading data. See console for details.");
+    });
+
+</script>
+</body>
+</html>

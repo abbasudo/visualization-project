@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Data Visualization Projects</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #111827;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --accent: #38bdf8;
+      --border: #1f2937;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: 'Manrope', system-ui, -apple-system, sans-serif;
+      background: radial-gradient(circle at 20% 20%, rgba(56, 189, 248, 0.12), transparent 25%),
+                  radial-gradient(circle at 80% 0%, rgba(167, 139, 250, 0.14), transparent 30%),
+                  var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 32px;
+    }
+
+    .shell {
+      width: min(1100px, 100%);
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 32px;
+      box-shadow: 0 30px 120px rgba(0, 0, 0, 0.35);
+    }
+
+    header {
+      display: grid;
+      grid-template-columns: 1fr 220px;
+      gap: 24px;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 24px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 32px;
+      letter-spacing: -0.02em;
+    }
+
+    .lead {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .cta {
+      display: grid;
+      gap: 12px;
+    }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 12px 16px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      color: var(--text);
+      text-decoration: none;
+      font-weight: 700;
+      transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+      background: linear-gradient(135deg, rgba(56, 189, 248, 0.18), rgba(14, 165, 233, 0.18));
+    }
+
+    .button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 40px rgba(56, 189, 248, 0.25);
+      border-color: rgba(56, 189, 248, 0.5);
+    }
+
+    section {
+      margin-top: 28px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 18px;
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px;
+      display: grid;
+      gap: 10px;
+      transition: border-color 120ms ease, transform 120ms ease;
+    }
+
+    .card:hover {
+      border-color: rgba(56, 189, 248, 0.4);
+      transform: translateY(-1px);
+    }
+
+    .card h2 {
+      margin: 0;
+      font-size: 18px;
+    }
+
+    .card p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .link-row {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    footer {
+      margin-top: 28px;
+      border-top: 1px solid var(--border);
+      padding-top: 18px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    @media (max-width: 720px) {
+      header {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <div>
+        <h1>When Health Outpaces Wealth</h1>
+        <p class="lead">
+          A Data-Driven Analysis of Global Longevity and Economic Prosperity (1950-2022).
+        </p>
+      </div>
+      <div class="cta">
+        <a class="button" href="scatter.html">View Scatter Plot</a>
+        <a class="button" href="countries.html">View Countries Heat Map</a>
+      </div>
+    </header>
+
+    <section>
+      <div class="card">
+        <h2>Project Description</h2>
+        <p>
+          This analysis examines the evolution of global life expectancy and economic prosperity from 1950 to 2022. By visualizing the relationship between life expectancy at birth and GDP per capita, we uncover trends, disparities, and insights into how health outcomes have evolved in relation to economic growth across different countries and regions.
+        </p>
+      </div>
+      <div class="card">
+        <h2>Data Source</h2>
+        <p>
+            The dataset, aggregated by Our World in Data (OWID), combines national health and economic metrics from 1543 to the present day.
+        </p>
+        <a class="link-row" href="https://ourworldindata.org/grapher/life-expectancy-vs-gdp-per-capita?tab=table">Open Our World
+in Data</a>
+      </div>
+      <div class="card">
+        <h2>Repository</h2>
+        <p>
+          Explore the codebase and Python Notebook on GitHub.
+        </p>
+        <a class="link-row" href="https://github.com/abbasudo/your-repo" target="_blank" rel="noopener noreferrer">GitHub repository</a>
+      </div>
+    </section>
+
+    <footer>
+      <span><a class="link-row" href="https://visualization.abbasudo.ir">When Health Outpaces Wealth</a> © 2026 by <a class="link-row" href="https://abbasudo.ir">Abbas Mkhzomi</a> is licensed under <a class="link-row" href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a><img src="https://mirrors.creativecommons.org/presskit/icons/cc.svg" alt="" style="max-width: 1em;max-height:1em;margin-left: .2em;"><img src="https://mirrors.creativecommons.org/presskit/icons/by.svg" alt="" style="max-width: 1em;max-height:1em;margin-left: .2em;"></span>
+    </footer>
+  </div>
+</body>
+</html>

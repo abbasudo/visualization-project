@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Global Development: 1543 - 2022</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f4f9;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h1 { margin-bottom: 5px; color: #333; }
+        p { margin-top: 0; color: #666; font-size: 0.9em; }
+
+        /* Layout for Chart and Controls */
+        #chart-container {
+            position: relative;
+            background: white;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        /* The Year Display in background */
+        .year-label {
+            font-size: 200px;
+            font-weight: bold;
+            fill: #eee;
+            font-family: 'Helvetica Neue', sans-serif;
+            text-anchor: end;
+        }
+
+        /* Controls */
+        #controls {
+            margin-top: 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            width: 100%;
+            max-width: 960px;
+        }
+
+        button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover { background-color: #45a049; }
+
+        input[type=range] {
+            flex-grow: 1;
+            cursor: pointer;
+        }
+
+        /* Tooltip */
+        .tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.8);
+            color: #fff;
+            padding: 8px;
+            border-radius: 4px;
+            pointer-events: none;
+            font-size: 12px;
+            opacity: 0;
+            transition: opacity 0.2s;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
+        }
+
+        /* Axis and Bubble Styles */
+        .axis path, .axis line { stroke: #ccc; }
+        .grid line { stroke: #eee; stroke-opacity: 0.7; shape-rendering: crispEdges; }
+        circle { stroke: #333; stroke-width: 0.5px; opacity: 0.8; }
+        circle:hover { stroke: #000; stroke-width: 2px; opacity: 1; }
+        
+        .legend-item { font-size: 12px; font-weight: bold; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <h1>Health & Wealth of Nations</h1>
+    <p>Data Source: Our World in Data (1543 - 2022)</p>
+
+    <div id="chart-container"></div>
+
+    <div id="controls">
+        <button id="play-btn">Play</button>
+        <button id="prev-btn">Previous</button>
+        <button id="next-btn">Next</button>
+        <input type="range" id="year-slider" min="1543" max="2022" value="1543" step="1">
+    </div>
+
+    <div class="tooltip" id="tooltip"></div>
+
+<script>
+    // 1. CONFIGURATION
+    const margin = {top: 20, right: 20, bottom: 50, left: 60};
+    const width = 960 - margin.left - margin.right;
+    const height = 600 - margin.top - margin.bottom;
+    const duration = 200; // Animation speed in ms per frame
+
+    // 2. SETUP SVG
+    const svg = d3.select("#chart-container")
+        .append("svg")
+        .attr("width", width + margin.left + margin.right)
+        .attr("height", height + margin.top + margin.bottom)
+        .append("g")
+        .attr("transform", `translate(${margin.left},${margin.top})`);
+
+    // 3. SCALES
+    // X Axis: Log Scale for GDP (handles huge growth from 1500s to 2000s)
+    const x = d3.scaleLog()
+        .domain([300, 150000]) // Adjust domain based on min/max GDP in your data
+        .range([0, width]);
+
+    // Y Axis: Linear Scale for Life Expectancy
+    const y = d3.scaleLinear()
+        .domain([10, 90])
+        .range([height, 0]);
+
+    // Radius Scale: Sqrt Scale for Population (area represents size)
+    const r = d3.scaleSqrt()
+        .domain([100000, 1400000000]) // From small nations to China/India
+        .range([2, 50]);
+
+    // Color Scale: Ordinal for Regions
+    const color = d3.scaleOrdinal(d3.schemeSet2)
+        .domain(["Asia", "Europe", "Africa", "North America", "South America", "Oceania"]);
+
+    // 4. DRAW AXES & LABELS
+    // X Axis
+    svg.append("g")
+        .attr("class", "axis")
+        .attr("transform", `translate(0,${height})`)
+        .call(d3.axisBottom(x).ticks(10, ",.0f").tickFormat(d => "$" + d));
+
+    svg.append("text")
+        .attr("x", width / 2)
+        .attr("y", height + 40)
+        .attr("text-anchor", "middle")
+        .text("GDP per Capita (Inflation-adjusted)");
+
+    // Y Axis
+    svg.append("g")
+        .attr("class", "axis")
+        .call(d3.axisLeft(y));
+
+    svg.append("text")
+        .attr("transform", "rotate(-90)")
+        .attr("x", -height / 2)
+        .attr("y", -40)
+        .attr("text-anchor", "middle")
+        .text("Life Expectancy (Years)");
+
+    // Background Year Label
+    const yearLabel = svg.append("text")
+        .attr("class", "year-label")
+        .attr("x", width - 40)
+        .attr("y", height - 40)
+        .text("1543");
+
+    // 5. LOAD AND PROCESS DATA
+    d3.csv("https://ourworldindata.org/grapher/life-expectancy-vs-gdp-per-capita.csv?v=1&csvType=full").then(rawData => {
+        
+        // Data Parsing
+        const data = rawData.map(d => ({
+            country: d.Entity,
+            region: d["World region according to OWID"],
+            year: +d.Year,
+            lifeExp: +d["Life expectancy at birth"],
+            gdp: +d["GDP per capita"],
+            pop: +d.Population
+        })).filter(d => d.region && d.gdp && d.lifeExp && d.pop && d.year >= 1543 && d.year <= 2022); // Filter incomplete rows and clamp years
+
+        // Get min and max years found in data
+        const years = Array.from(new Set(data.map(d => d.year))).sort((a,b) => a - b);
+        const minYear = Math.max(1543, years[0]);
+        const maxYear = Math.min(2022, years[years.length - 1]);
+
+        // Update Slider Constraints
+        const slider = document.getElementById("year-slider");
+        slider.min = minYear;
+        slider.max = maxYear;
+        slider.value = minYear;
+
+        // Tooltip Selection
+        const tooltip = d3.select("#tooltip");
+
+        // 6. UPDATE FUNCTION
+        function update(year) {
+            // Filter data for the specific year
+            const yearData = data.filter(d => d.year === year);
+
+            // Bind Data
+            const circles = svg.selectAll("circle")
+                .data(yearData, d => d.country); // Key function ensures smooth transitions per country
+
+            // ENTER (Create new circles)
+            const enter = circles.enter()
+                .append("circle")
+                .attr("cx", d => x(d.gdp))
+                .attr("cy", d => y(d.lifeExp))
+                .attr("r", 0) // Start small
+                .style("fill", d => color(d.region))
+                .on("mouseover", function(event, d) {
+                    tooltip.transition().duration(200).style("opacity", .9);
+                    tooltip.html(`<strong>${d.country}</strong><br>
+                                  GDP: $${Math.round(d.gdp).toLocaleString()}<br>
+                                  Life Exp: ${d.lifeExp.toFixed(1)} yrs<br>
+                                  Pop: ${(d.pop / 1000000).toFixed(1)} M`)
+                           .style("left", (event.pageX + 10) + "px")
+                           .style("top", (event.pageY - 28) + "px");
+                    d3.select(this).style("stroke", "black").style("opacity", 1);
+                })
+                .on("mouseout", function() {
+                    tooltip.transition().duration(500).style("opacity", 0);
+                    d3.select(this).style("stroke", "#333").style("opacity", 0.8);
+                });
+
+            // MERGE (Update existing circles + Enter)
+            circles.merge(enter)
+                .transition()
+                .duration(duration)
+                .ease(d3.easeLinear)
+                .attr("cx", d => x(d.gdp))
+                .attr("cy", d => y(d.lifeExp))
+                .attr("r", d => r(d.pop));
+
+            // EXIT (Remove old circles)
+            circles.exit()
+                .transition()
+                .duration(duration)
+                .attr("r", 0)
+                .remove();
+
+            // Update Year Text
+            yearLabel.text(year);
+            slider.value = year;
+        }
+
+        // Initial Render
+        update(minYear);
+
+        // 7. ANIMATION CONTROLS
+        let timer;
+        let isPlaying = false;
+        let currentYear = minYear;
+
+        function getNextYear(year) {
+            for (let i = 0; i < years.length; i++) {
+                if (years[i] > year) return years[i];
+            }
+            return null;
+        }
+
+        function getPrevYear(year) {
+            for (let i = years.length - 1; i >= 0; i--) {
+                if (years[i] < year) return years[i];
+            }
+            return null;
+        }
+
+        function step() {
+            const next = getNextYear(currentYear) || minYear;
+            currentYear = next;
+            update(currentYear);
+            if (currentYear >= maxYear && !getNextYear(currentYear)) {
+                stopAnimation();
+            }
+        }
+
+        function startAnimation() {
+            if (!isPlaying) {
+                isPlaying = true;
+                document.getElementById("play-btn").innerText = "Pause";
+                // If we are at the end, restart
+                if (+slider.value >= maxYear) currentYear = minYear;
+                else currentYear = +slider.value;
+                
+                timer = d3.interval(step, duration);
+            }
+        }
+
+        function stopAnimation() {
+            isPlaying = false;
+            document.getElementById("play-btn").innerText = "Play";
+            if (timer) timer.stop();
+        }
+
+        // Event Listeners
+        d3.select("#play-btn").on("click", () => {
+            if (isPlaying) stopAnimation();
+            else startAnimation();
+        });
+
+        d3.select("#year-slider").on("input", function() {
+            stopAnimation();
+            currentYear = +this.value;
+            // Snap to nearest available year in data if needed, or just update
+            update(currentYear);
+        });
+
+        d3.select("#next-btn").on("click", () => {
+            stopAnimation();
+            const next = getNextYear(currentYear);
+            if (next) {
+                currentYear = next;
+                update(currentYear);
+            }
+        });
+
+        d3.select("#prev-btn").on("click", () => {
+            stopAnimation();
+            const prev = getPrevYear(currentYear);
+            if (prev) {
+                currentYear = prev;
+                update(currentYear);
+            }
+        });
+
+    }).catch(error => {
+        console.error("Error loading CSV data: ", error);
+        d3.select("#chart-container").append("p")
+          .style("color", "red")
+          .text("Error: Could not load data. Make sure 'life-expectancy-vs-gdp-per-capita.csv' is in the same folder and you are running a local server.");
+    });
+
+</script>
+</body>
+</html>
